@@ -9,12 +9,13 @@ DATA_DIR = os.path.join(SCRIPT_PATH, "data")
 
 Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
-# max_pages = 3
-max_pages = float("inf")
+max_pages = 3
+# max_pages = float("inf")
+
+salaries = []
 
 # Diamondback has data from 2013 to 2022
 for year in range(2013, 2023):
-    salaries = []
     page = 1
     page_data = [0]
 
@@ -24,13 +25,14 @@ for year in range(2013, 2023):
             f"https://api.dbknews.com/salary/year/{year}", params={"page": page}
         )
 
-        page_data = r.json()["data"]
+        page_data = list(map(lambda x: {"year": year, **x}, r.json()["data"]))
         page += 1
 
         salaries += page_data
 
-    df = pd.DataFrame.from_records(salaries)
-    csv_path = os.path.join(DATA_DIR, f"salaries_{year}.csv")
-    df.to_csv(csv_path)
-    print(f"Writing to {csv_path}")
+df = pd.DataFrame.from_records(salaries)
+df.columns = df.columns.str.lower()
 
+csv_path = os.path.join(DATA_DIR, f"salaries.csv")
+df.to_csv(csv_path, index=False)
+print(f"Writing to {csv_path}")
