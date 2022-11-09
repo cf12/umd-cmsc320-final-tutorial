@@ -9,8 +9,8 @@ DATA_DIR = os.path.join(SCRIPT_PATH, "data")
 
 Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
-max_pages = 3
-# max_pages = float("inf")
+# max_pages = 3
+max_pages = float("inf")
 
 salaries = []
 
@@ -33,6 +33,6 @@ for year in range(2013, 2023):
 df = pd.DataFrame.from_records(salaries)
 df.columns = df.columns.str.lower()
 
-csv_path = os.path.join(DATA_DIR, f"salaries.csv")
+csv_path = os.path.join(DATA_DIR, "salaries.csv")
 df.to_csv(csv_path, index=False)
 print(f"Writing to {csv_path}")
