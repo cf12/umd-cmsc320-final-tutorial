@@ -1,232 +1,270 @@
-
 import requests
 import json
-import math
-import csv
-import os
 
-# scraper code sourced from https://github.com/tisuela/ratemyprof-api
+def rmp_search(name):
+  query = """query NewSearchTeachersQuery(
+          $query: TeacherSearchQuery!
+      ) {
+      newSearch {
+          teachers(query: $query) {
+          didFallback
+          edges {
+              cursor
+              node {
+              id
+              legacyId
+              firstName
+              lastName
+              school {
+                  name
+                  id
+              }
+              department
+              }
+          }
+          }
+      }
+  }"""   
 
-# This code has been tested using Python 3.6 interpreter and Linux (Ubuntu).
-# It should run under Windows, if anything you may need to make some adjustments for the file paths of the CSV files.
+  variables = {"query": {"text": name}}
+  url = "https://www.ratemyprofessors.com/graphql"
+  basic = requests.auth.HTTPBasicAuth('test', 'test')
+  res = requests.post(url, json={"query": query, "variables": variables}, auth=basic)
 
-class Professor:
-    def __init__(self, ratemyprof_id: int, first_name: str, last_name: str, num_of_ratings: int, overall_rating):
-        self.ratemyprof_id = ratemyprof_id
+  data = json.loads(res.text)
+  profId = ""
 
-        self.name = f"{first_name} {last_name}"
-        self.first_name = first_name
-        self.last_name = last_name
-        self.num_of_ratings = num_of_ratings
+  try:
+    profId = data['data']['newSearch']['teachers']['edges'][0]['node']['id']
+  except:
+    profId = "NA"
 
-        if self.num_of_ratings < 1:
-            self.overall_rating = 0
+  return profId
 
-        else:
-            self.overall_rating = float(overall_rating)
+def rmp_get_ratings(name):
+  query = """query RatingsListQuery(
+    $count: Int!
+    $id: ID!
+    $courseFilter: String
+    $cursor: String
+  ) {
+    node(id: $id) {
+      __typename
+      ... on Teacher {
+        ...RatingsList_teacher_4pguUW
+      }
+      id
+    }
+  }
 
-class ProfessorNotFound(Exception):
-    def __init__(self, search_argument, search_parameter: str = "Name"):
+  fragment RatingsList_teacher_4pguUW on Teacher {
+    id
+    legacyId
+    lastName
+    numRatings
+    school {
+      id
+      legacyId
+      name
+      city
+      state
+      avgRating
+      numRatings
+    }
+    ...Rating_teacher
+    ...NoRatingsArea_teacher
+    ratings(first: $count, after: $cursor, courseFilter: $courseFilter) {
+      edges {
+        cursor
+        node {
+          ...Rating_rating
+          id
+          __typename
+        }
+      }
+      pageInfo {
+        hasNextPage
+        endCursor
+      }
+    }
+  }
 
-        # What the client is looking for. Ex: "Professor Pattis"
-        self.search_argument = self.search_argument
+  fragment Rating_teacher on Teacher {
+    ...RatingFooter_teacher
+    ...RatingSuperHeader_teacher
+    ...ProfessorNoteSection_teacher
+  }
 
-        # The search criteria. Ex: Last Name
-        self.search_parameter = search_parameter
+  fragment NoRatingsArea_teacher on Teacher {
+    lastName
+    ...RateTeacherLink_teacher
+  }
 
-    def __str__(self):
+  fragment Rating_rating on Rating {
+    comment
+    flagStatus
+    createdByUser
+    teacherNote {
+      id
+    }
+    ...RatingHeader_rating
+    ...RatingSuperHeader_rating
+    ...RatingValues_rating
+    ...CourseMeta_rating
+    ...RatingTags_rating
+    ...RatingFooter_rating
+    ...ProfessorNoteSection_rating
+  }
 
-        return (
-            f"Proessor not found"
-            + f" The search argument {self.search_argument} did not"
-            + f" match with any professor's {self.search_parameter}"
-        )
+  fragment RatingHeader_rating on Rating {
+    date
+    class
+    helpfulRating
+    clarityRating
+    isForOnlineClass
+  }
 
+  fragment RatingSuperHeader_rating on Rating {
+    legacyId
+  }
 
-class RateMyProfApi:
-    def __init__(self, school_id: str = "1074", testing: bool = False):
-        self.UniversityId = school_id
-        if not os.path.exists("SchoolID_" + str(self.UniversityId)):
-            os.mkdir("SchoolID_" + str(self.UniversityId))
+  fragment RatingValues_rating on Rating {
+    helpfulRating
+    clarityRating
+    difficultyRating
+  }
 
-        # dict of Professor
-        self.professors= self.scrape_professors(testing)
-        self.indexnumber = False
+  fragment CourseMeta_rating on Rating {
+    attendanceMandatory
+    wouldTakeAgain
+    grade
+    textbookUse
+    isForOnlineClass
+    isForCredit
+  }
 
-    def scrape_professors(
-        self,
-        testing: bool = False
-    ):  # creates List object that include basic information on all Professors from the IDed University
-        professors = dict()
-        num_of_prof = self.get_num_of_professors(self.UniversityId)
-        num_of_pages = math.ceil(num_of_prof / 20)
+  fragment RatingTags_rating on Rating {
+    ratingTags
+  }
 
-        for i in range(1, num_of_pages + 1):  # the loop insert all professor into list
-            page = requests.get(
-                "http://www.ratemyprofessors.com/filter/professor/?&page="
-                + str(i)
-                + "&filter=teacherlastname_sort_s+asc&query=*%3A*&queryoption=TEACHER&queryBy=schoolId&sid="
-                + str(self.UniversityId)
-            )
-            json_response = json.loads(page.content)
-            temp_list = json_response["professors"]
+  fragment RatingFooter_rating on Rating {
+    id
+    comment
+    adminReviewedAt
+    flagStatus
+    legacyId
+    thumbsUpTotal
+    thumbsDownTotal
+    thumbs {
+      userId
+      thumbsUp
+      thumbsDown
+      id
+    }
+    teacherNote {
+      id
+    }
+  }
 
+  fragment ProfessorNoteSection_rating on Rating {
+    teacherNote {
+      ...ProfessorNote_note
+      id
+    }
+    ...ProfessorNoteEditor_rating
+  }
 
-            for json_professor in json_response["professors"]:
-                print(json_professor)
-                professor = Professor(
-                    json_professor["tid"],
-                    json_professor["tFname"],
-                    json_professor["tLname"],
-                    json_professor["tNumRatings"],
-                    json_professor["overall_rating"])
+  fragment ProfessorNote_note on TeacherNotes {
+    comment
+    ...ProfessorNoteHeader_note
+    ...ProfessorNoteFooter_note
+  }
 
-                professors[professor.ratemyprof_id] = professor
+  fragment ProfessorNoteEditor_rating on Rating {
+    id
+    legacyId
+    class
+    teacherNote {
+      id
+      teacherId
+      comment
+    }
+  }
 
-            # for test cases, limit to 2 iterations
-            if testing and (i > 1): break
+  fragment ProfessorNoteHeader_note on TeacherNotes {
+    createdAt
+    updatedAt
+  }
 
-        return professors
+  fragment ProfessorNoteFooter_note on TeacherNotes {
+    legacyId
+    flagStatus
+  }
 
-    def get_num_of_professors(
-        self, id
-    ):  # function returns the number of professors in the university of the given ID.
-        page = requests.get(
-            "http://www.ratemyprofessors.com/filter/professor/?&page=1&filter=teacherlastname_sort_s+asc&query=*%3A*&queryoption=TEACHER&queryBy=schoolId&sid="
-            + str(id)
-        )  # get request for page
-        temp_jsonpage = json.loads(page.content)
-        num_of_prof = (
-            temp_jsonpage["remaining"] + 20
-        )  # get the number of professors at William Paterson University
-        return num_of_prof
+  fragment RateTeacherLink_teacher on Teacher {
+    legacyId
+    numRatings
+    lockStatus
+  }
 
-    def search_professor(self, ProfessorName):
-        self.indexnumber = self.get_professor_index(ProfessorName)
-        self.print_professor_info()
-        return self.indexnumber
+  fragment RatingFooter_teacher on Teacher {
+    id
+    legacyId
+    lockStatus
+    isProfCurrentUser
+  }
 
+  fragment RatingSuperHeader_teacher on Teacher {
+    firstName
+    lastName
+    legacyId
+    school {
+      name
+      id
+    }
+  }
 
+  fragment ProfessorNoteSection_teacher on Teacher {
+    ...ProfessorNote_teacher
+    ...ProfessorNoteEditor_teacher
+  }
 
-    def get_professor_by_last_name(
-        self, last_name
-    ) -> Professor:
-        '''
-        Return the first professor with the matching last name.
-        Case insenstive.
-        '''
-        last_name = last_name.lower()
-        for name in professors:
-            if last_name == professors[name].last_name.lower():
-                return professors[name]
+  fragment ProfessorNote_teacher on Teacher {
+    ...ProfessorNoteHeader_teacher
+    ...ProfessorNoteFooter_teacher
+  }
 
-        # Raise error if no matching professor found
-        raise ProfessorNotFound(last_name, "Last Name")
+  fragment ProfessorNoteEditor_teacher on Teacher {
+    id
+  }
 
+  fragment ProfessorNoteHeader_teacher on Teacher {
+    lastName
+  }
 
+  fragment ProfessorNoteFooter_teacher on Teacher {
+    legacyId
+    isProfCurrentUser
+  }
+  """
 
+  id = rmp_search(name)
 
+  if id == "NA":
+    return []
 
-    def WriteProfessorListToCSV(self):
-        csv_columns = [
-            "tDept",
-            "tSid",
-            "institution_name",
-            "tFname",
-            "tMiddlename",
-            "tLname",
-            "tid",
-            "tNumRatings",
-            "rating_class",
-            "contentType",
-            "categoryType",
-            "overall_rating",
-        ]
-        csv_file = "SchoolID_" + str(self.UniversityId) + ".csv"
-        with open(csv_file, "w") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
-            writer.writeheader()
-            for data in self.professors:
-                writer.writerow(self.professors[data])
+  variablesProbe = {"count":0,"id": id}
+  url = "https://www.ratemyprofessors.com/graphql"
+  basic = requests.auth.HTTPBasicAuth('test', 'test')
+  resProbe = requests.post(url, json={"query": query, "variables": variablesProbe}, auth=basic)
+  data = json.loads(resProbe.text)
 
-    def create_reviews_list(self, tid):
-        tempreviewslist = []
-        num_of_reviews = self.get_num_of_reviews(tid)
-        # RMP only loads 20 reviews per page,
-        # so num_of_pages tells us how many pages we need to get all the reviews
-        num_of_pages = math.ceil(num_of_reviews / 20)
-        i = 1
-        while i <= num_of_pages:
-            page = requests.get(
-                "https://www.ratemyprofessors.com/paginate/professors/ratings?tid="
-                + str(tid)
-                + "&filter=&courseCode=&page="
-                + str(i)
-            )
-            temp_jsonpage = json.loads(page.content)
-            temp_list = temp_jsonpage["ratings"]
-            tempreviewslist.extend(temp_list)
-            i += 1
-        return tempreviewslist
+  profRatingsCount = data['data']['node']['numRatings']
 
-    def get_num_of_reviews(self, id):
-        page = requests.get(
-            "https://www.ratemyprofessors.com/paginate/professors/ratings?tid="
-            + str(id)
-            + "&filter=&courseCode=&page=1"
-        )
-        temp_jsonpage = json.loads(page.content)
-        num_of_reviews = temp_jsonpage["remaining"] + 20
-        return num_of_reviews
+  variables = {"count":profRatingsCount,"id": id}
+  res = requests.post(url, json={"query": query, "variables": variables}, auth=basic)
+  ratings = json.loads(res.text)['data']['node']['ratings']['edges']
 
-    def WriteReviewsListToCSV(self, rlist, tid):
-        csv_columns = [
-            "attendance",
-            "clarityColor",
-            "easyColor",
-            "helpColor",
-            "helpCount",
-            "id",
-            "notHelpCount",
-            "onlineClass",
-            "quality",
-            "rClarity",
-            "rClass",
-            "rComments",
-            "rDate",
-            "rEasy",
-            "rEasyString",
-            "rErrorMsg",
-            "rHelpful",
-            "rInterest",
-            "rOverall",
-            "rOverallString",
-            "rStatus",
-            "rTextBookUse",
-            "rTimestamp",
-            "rWouldTakeAgain",
-            "sId",
-            "takenForCredit",
-            "teacher",
-            "teacherGrade",
-            "teacherRatingTags",
-            "unUsefulGrouping",
-            "usefulGrouping",
-        ]
-        csv_file = (
-            "./SchoolID_" + str(self.UniversityId) + "/TeacherID_" + str(tid) + ".csv"
-        )
-        with open(csv_file, "w") as csvfile:
-            writer = csv.DictWriter(csvfile, fieldnames=csv_columns)
-            writer.writeheader()
-            for data in rlist:
-                writer.writerow(data)
+  return ratings
 
-
-
-# Getting general professor info!
-umd = RateMyProfApi(1270)
-
-
-umd.WriteProfessorListToCSV()
-# uci.print_professor_detail("overall_rating")
+print(rmp_get_ratings("Clyde Kruskal"))
