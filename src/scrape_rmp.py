@@ -1,5 +1,24 @@
 import requests
 import json
+import pandas as pd
+import os
+from pathlib import Path
+from ratelimit import limits, sleep_and_retry
+
+DATA_DIR = Path("./data").resolve()
+CSV_PATH = os.path.join(DATA_DIR, "rmp_ratings.csv")
+
+profs = pd.read_csv("./data/salaries.csv")
+
+profs["name"] = profs["employee"].apply(
+    lambda x: " ".join(x.split(", ")[::-1])
+)
+names = profs["name"].unique()
+print(len(names))
+
+# names = ["Clyde Kruskal"]
+
+# professor name, courses, average rating, reviews (course, rating, date)
 
 def rmp_search(name):
   query = """query NewSearchTeachersQuery(
@@ -41,6 +60,8 @@ def rmp_search(name):
 
   return profId
 
+# @sleep_and_retry
+# @limits(calls=2, period=3)
 def rmp_get_ratings(name):
   query = """query RatingsListQuery(
     $count: Int!
@@ -259,7 +280,15 @@ def rmp_get_ratings(name):
   resProbe = requests.post(url, json={"query": query, "variables": variablesProbe}, auth=basic)
   data = json.loads(resProbe.text)
 
-  profRatingsCount = data['data']['node']['numRatings']
+  profRatingsCount = 0
+
+  try:
+    profRatingsCount = data['data']['node']['numRatings']
+  except:
+    profRatingsCount = 0
+
+  if profRatingsCount == 0:
+    return []
 
   variables = {"count":profRatingsCount,"id": id}
   res = requests.post(url, json={"query": query, "variables": variables}, auth=basic)
@@ -267,4 +296,36 @@ def rmp_get_ratings(name):
 
   return ratings
 
-print(rmp_get_ratings("Clyde Kruskal"))
+df = pd.DataFrame(columns=['name', 'rating', 'courses', 'reviews'])
+
+for i, name in enumerate(names):
+    print(f"getting reviews for {name} {i}/{len(names)}")
+    courses = set()
+    ratings = rmp_get_ratings(name)
+    reviews = []
+    score = 0
+    for rating in ratings:
+        data = rating['node']
+        course = data['class']
+        courses.add(course)
+        score += data['clarityRating']
+        score += data['helpfulRating']
+
+        reviews.append({
+            "professor": name,
+            "course": course,
+            "review": data['comment'],
+            "rating": data['clarityRating'],
+            "expected_grade": data['grade'],
+            "created": data['date']
+        })
+    
+    if len(ratings) != 0:
+        score /= (len(ratings) * 2)
+    else:
+        score = 0
+
+    df.loc[len(df)] = [name, score, list(courses), reviews]
+
+print("making csv...")
+df.to_csv(CSV_PATH, index=False)
