@@ -10,18 +10,23 @@ CSV_PATH = os.path.join(DATA_DIR, "rmp_ratings.csv")
 
 profs = pd.read_csv("./data/salaries.csv")
 
-profs["name"] = profs["employee"].apply(
-    lambda x: " ".join(x.split(", ")[::-1])
-)
+profs["name"] = profs["employee"].apply(lambda x: " ".join(x.split(", ")[::-1]))
 names = profs["name"].unique()
 print(len(names))
+
+# for idx, name in enumerate(names):
+#     found = name.find("Wyss")
+#     if found != -1:
+#         print(idx)
+# print(names[4985])
 
 # names = ["Clyde Kruskal"]
 
 # professor name, courses, average rating, reviews (course, rating, date)
 
+
 def rmp_search(name):
-  query = """query NewSearchTeachersQuery(
+    query = """query NewSearchTeachersQuery(
           $query: TeacherSearchQuery!
       ) {
       newSearch {
@@ -43,27 +48,28 @@ def rmp_search(name):
           }
           }
       }
-  }"""   
+  }"""
 
-  variables = {"query": {"text": name}}
-  url = "https://www.ratemyprofessors.com/graphql"
-  basic = requests.auth.HTTPBasicAuth('test', 'test')
-  res = requests.post(url, json={"query": query, "variables": variables}, auth=basic)
+    variables = {"query": {"text": name}}
+    url = "https://www.ratemyprofessors.com/graphql"
+    basic = requests.auth.HTTPBasicAuth("test", "test")
+    res = requests.post(url, json={"query": query, "variables": variables}, auth=basic)
 
-  data = json.loads(res.text)
-  profId = ""
+    data = json.loads(res.text)
+    profId = ""
 
-  try:
-    profId = data['data']['newSearch']['teachers']['edges'][0]['node']['id']
-  except:
-    profId = "NA"
+    try:
+        profId = data["data"]["newSearch"]["teachers"]["edges"][0]["node"]["id"]
+    except:
+        profId = "NA"
 
-  return profId
+    return profId
+
 
 # @sleep_and_retry
 # @limits(calls=2, period=3)
 def rmp_get_ratings(name):
-  query = """query RatingsListQuery(
+    query = """query RatingsListQuery(
     $count: Int!
     $id: ID!
     $courseFilter: String
@@ -269,59 +275,75 @@ def rmp_get_ratings(name):
   }
   """
 
-  id = rmp_search(name)
+    id = rmp_search(name)
 
-  if id == "NA":
-    return []
+    if id == "NA":
+        return []
 
-  variablesProbe = {"count":0,"id": id}
-  url = "https://www.ratemyprofessors.com/graphql"
-  basic = requests.auth.HTTPBasicAuth('test', 'test')
-  resProbe = requests.post(url, json={"query": query, "variables": variablesProbe}, auth=basic)
-  data = json.loads(resProbe.text)
+    variablesProbe = {"count": 0, "id": id}
+    url = "https://www.ratemyprofessors.com/graphql"
+    basic = requests.auth.HTTPBasicAuth("test", "test")
+    resProbe = requests.post(
+        url, json={"query": query, "variables": variablesProbe}, auth=basic
+    )
+    data = json.loads(resProbe.text)
 
-  profRatingsCount = 0
-
-  try:
-    profRatingsCount = data['data']['node']['numRatings']
-  except:
     profRatingsCount = 0
 
-  if profRatingsCount == 0:
-    return []
+    try:
+        profRatingsCount = data["data"]["node"]["numRatings"]
+    except:
+        profRatingsCount = 0
 
-  variables = {"count":profRatingsCount,"id": id}
-  res = requests.post(url, json={"query": query, "variables": variables}, auth=basic)
-  ratings = json.loads(res.text)['data']['node']['ratings']['edges']
+    if profRatingsCount == 0:
+        return []
 
-  return ratings
+    variables = {"count": profRatingsCount, "id": id}
+    res = requests.post(url, json={"query": query, "variables": variables}, auth=basic)
+    ratings = json.loads(res.text)["data"]["node"]["ratings"]["edges"]
 
-df = pd.DataFrame(columns=['name', 'rating', 'courses', 'reviews'])
+    return ratings
+
+
+# out = ""
+# splitted = "Justin Olav Wyss-Gallifent".split(" ")
+# if len(splitted) == 3:
+#     out = splitted[0] + " " + splitted[2]
+
+# print(out)
+
+
+df = pd.DataFrame(columns=["name", "rating", "courses", "reviews"])
 
 for i, name in enumerate(names):
+    splitted = name.split(" ")
+    if len(splitted) == 3:
+        name = splitted[0] + " " + splitted[2]
     print(f"getting reviews for {name} {i}/{len(names)}")
     courses = set()
     ratings = rmp_get_ratings(name)
     reviews = []
     score = 0
     for rating in ratings:
-        data = rating['node']
-        course = data['class']
+        data = rating["node"]
+        course = data["class"]
         courses.add(course)
-        score += data['clarityRating']
-        score += data['helpfulRating']
+        score += data["clarityRating"]
+        score += data["helpfulRating"]
 
-        reviews.append({
-            "professor": name,
-            "course": course,
-            "review": data['comment'],
-            "rating": data['clarityRating'],
-            "expected_grade": data['grade'],
-            "created": data['date']
-        })
-    
+        reviews.append(
+            {
+                "professor": name,
+                "course": course,
+                "review": data["comment"],
+                "rating": data["clarityRating"],
+                "expected_grade": data["grade"],
+                "created": data["date"],
+            }
+        )
+
     if len(ratings) != 0:
-        score /= (len(ratings) * 2)
+        score /= len(ratings) * 2
     else:
         score = 0
 
