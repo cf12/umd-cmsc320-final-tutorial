@@ -6,7 +6,7 @@ from pathlib import Path
 from ratelimit import limits, sleep_and_retry
 
 DATA_DIR = Path("./data").resolve()
-CSV_PATH = os.path.join(DATA_DIR, "rmp_ratings.csv")
+CSV_PATH = os.path.join(DATA_DIR, "rmp_ratings_firstlast.csv")
 
 profs = pd.read_csv("./data/salaries.csv")
 
@@ -317,8 +317,8 @@ df = pd.DataFrame(columns=["name", "rating", "courses", "reviews"])
 
 for i, name in enumerate(names):
     splitted = name.split(" ")
-    if len(splitted) == 3:
-        name = splitted[0] + " " + splitted[2]
+    if len(splitted) >= 3:
+        name = splitted[0] + " " + splitted[-1]
     print(f"getting reviews for {name} {i}/{len(names)}")
     courses = set()
     ratings = rmp_get_ratings(name)
