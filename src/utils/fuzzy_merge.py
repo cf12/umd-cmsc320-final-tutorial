@@ -12,7 +12,7 @@ def get_fl(s: str):
 
 
 def fuzzy_merge(
-    d1: pd.DataFrame, d2: pd.DataFrame, fuzz_on="", alpha=0.75, beta=0.75, how="both"
+    d1: pd.DataFrame, d2: pd.DataFrame, fuzz_on="", alpha=0.75, beta=0.75, how="inner"
 ):
     d1_keys = d1[fuzz_on]
     d2_keys = d2[fuzz_on]
@@ -30,12 +30,12 @@ def fuzzy_merge(
         matches = fuzz.get(key)
         match_conf, match_name = matches[0]
 
-        print(f"{key} -> {matches}")
+        # print(f"{key} -> {matches}")
 
         if match_conf <= beta:
             matches = fuzz_fl.get(key)
             match_conf, match_name = matches[0]
-            print(f"{key} -> {matches}")
+            # print(f"{key} -> {matches}")
 
         return match_name if match_conf >= alpha else None
 
@@ -49,3 +49,4 @@ def fuzzy_merge(
         return pd.merge(d1, d2, left_on=fuzz_on, right_on="_fuzz", how=how).rename(
             columns={"_fuzz": fuzz_on}
         )
+
