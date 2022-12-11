@@ -59,15 +59,13 @@ def rmp_search(name):
     profId = ""
 
     professors = data["data"]["newSearch"]["teachers"]["edges"]
-    chosenProf = None
     if len(professors) > 0:
         for prof in professors:
             if prof["node"]["school"]["id"] == "U2Nob29sLTEyNzA=":
-                chosenProf = prof["node"]["id"]
+                return prof["node"]["id"]
+        return None
     else:
         return None
-
-    return chosenProf
 
 
 # @sleep_and_retry
