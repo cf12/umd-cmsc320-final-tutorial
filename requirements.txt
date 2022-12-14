@@ -79,4 +79,5 @@ typing-extensions==4.4.0
 urllib3==1.26.13
 wcwidth==0.2.5
 webencodings==0.5.1
+wordcloud==1.8.2.2
 zipp==3.11.0
