@@ -8,6 +8,7 @@ DATA_DIR = Path("./data").resolve()
 CSV_PATH = os.path.join(DATA_DIR, "pt_ratings.csv")
 
 
+# Rate limited API calls
 @sleep_and_retry
 @limits(calls=2, period=1)
 def call_api(offset: int):
@@ -22,6 +23,7 @@ def call_api(offset: int):
         return []
 
 
+# Skip if CSV exists already
 if os.path.exists(CSV_PATH):
     print(f"[i] {CSV_PATH} exists, skipping...")
     exit(1)
@@ -31,15 +33,18 @@ offset = 0
 page_data = [0]
 max_pages = float("inf")
 
+# Continue collecting pages until there's no more data
 while len(page_data) and offset < max_pages * 100:
     print(f"[i] Getting offset {offset}")
     page_data = call_api(offset)
     offset += 100
     rows += page_data
 
+# Convert to dataframe
 print("[i] Creating dataframe...")
 df = pd.DataFrame(rows)
 df.columns = df.columns.str.lower()
 
+# Write to file
 print(f"[i] Writing to {CSV_PATH}")
 df.to_csv(CSV_PATH, index=False)

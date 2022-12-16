@@ -10,8 +10,9 @@ CSV_PATH = os.path.join(DATA_DIR, "salaries.csv")
 Path(DATA_DIR).mkdir(parents=True, exist_ok=True)
 
 
-# @sleep_and_retry
-# @limits(calls=2, period=1)
+# Rate limited API calls
+@sleep_and_retry
+@limits(calls=2, period=1)
 def call_api(page: int, year: int):
     try:
         r = requests.get(
@@ -23,6 +24,7 @@ def call_api(page: int, year: int):
         return []
 
 
+# Skip if CSV exists already
 if os.path.exists(CSV_PATH):
     print("[i] salaries.csv exists, skipping...")
     exit(1)
@@ -37,6 +39,7 @@ for year in range(2013, 2023):
     page = 1
     page_data = [0]
 
+    # Continue collecting pages until there's no more data
     while page_data and page <= max_pages:
         print(f"[i] Getting page {page} for year {year}")
         data = call_api(page, year)["data"]
@@ -45,8 +48,10 @@ for year in range(2013, 2023):
         page += 1
         salaries += page_data
 
+# Convert to dataframe
 df = pd.DataFrame.from_records(salaries)
 df.columns = df.columns.str.lower()
 
+# Write data to file
 df.to_csv(CSV_PATH, index=False)
 print(f"[i] Writing to {CSV_PATH}")
